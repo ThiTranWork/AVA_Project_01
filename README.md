@@ -16,8 +16,8 @@ docker run --gpus all -it --rm -p 8888:8888 -v <path_to_repo>:/workspace/project
 
 
 - to run:
-python file to run AVA_TrafficViolationDetection.py
-store input video in Test_input
+docker run --gpus all -it --rm -p 8888:8888 -v /home/thi/Vitronic_Proj/AVA_Project_01/AVA_model:/workspace/projectAVA/ thitranwork/ava:02
+
 
 Github: https://github.com/ThiTranWork/AVA_Project
 
