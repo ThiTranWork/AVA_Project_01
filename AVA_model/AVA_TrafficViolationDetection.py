@@ -1,5 +1,6 @@
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.chdir("/workspace/projectAVA/YOLOV3_M") #point to the directory YOLOV3_M
 import cv2
 from matplotlib import pyplot as plt
 import numpy as np
@@ -9,13 +10,15 @@ from yolov3.configs import *
 import time
 from IPython.display import clear_output
 
+import os
+os.chdir("/workspace/projectAVA/YOLOV3_M")
 from deep_sort import nn_matching
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 from deep_sort import generate_detections as gdet
 
-video_input_path   = "./Test_input/Dubai_test1.ts"
-video_output_path = "./Test_output/Test_vitronic1.mp4"  
+video_input_path   = "./Dubai_test1_short.ts"
+video_output_path = "./Out_vitronic.mp4"  
 tracked_bboxes_history = []
 
 def Object_tracking(Yolo, video_path, output_path, input_size=416, show=False, CLASSES=YOLO_COCO_CLASSES, score_threshold=0.3, iou_threshold=0.45, rectangle_colors='', Track_only = []):
@@ -140,8 +143,6 @@ def Object_tracking(Yolo, video_path, output_path, input_size=416, show=False, C
             print(" total FPS: {:.1f}".format(fps2))
         
         tracked_bboxes_history.append(tracked_bboxes)
-
-
 
 # +
 # part 1 - Detection
