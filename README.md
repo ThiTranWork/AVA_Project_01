@@ -18,6 +18,8 @@ docker run --gpus all -it --rm -p 8888:8888 -v <path_to_repo>:/workspace/project
 
 CMD:
 docker build -t thitranwork/ava:02 .
+
+run with Jupyter Notebook:
  docker run --gpus all -it --rm -p 8888:8888 -v /home/thi/Vitronic_Proj/AVA_Project_02/AVA_model:/workspace/projectAVA/AVA_model thitranwork/ava:02
 
 
