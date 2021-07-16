@@ -41,14 +41,14 @@ def MyTruncatedData (storeframesize,current_frameIndex):
             mydataframe= mydataframe[mydataframe["frame_index"]>(current_frameIndex-storeframesize)]
 
 
-#caculate the zone where the object belongs to
+## Caculate the zone where the object belongs to
 def Zone_cacl(bounding_box, referenceZone):
     zone =(-1)* np.ones((bounding_box.shape[0], 1)) #-1 out of interest area
     for i in range (bounding_box.shape[0]):
         if referenceZone.shape[1]==2:  # input is a line
             x= referenceZone[0]
             y= referenceZone[1]
-            #x_test, y_test = the middle point of the ground line in bbox
+            ## x_test, y_test = the middle point of the ground line in bbox
             x_test=(bounding_box[i][0]+bounding_box[i][2])/2
             y_test=bounding_box[i][3]
             if (x[0]!=x[1]):
@@ -67,9 +67,6 @@ def Zone_cacl(bounding_box, referenceZone):
                         zone [i][0]=0
 
     return zone  
-#     else:
-#         if referenceZone.shape[1]==4 #input is a Quadrilateral
-#             return 1
 
 
 def ObjCount_process (mydataframe,output_path, current_image= [],\
@@ -82,18 +79,14 @@ def ObjCount_process (mydataframe,output_path, current_image= [],\
                 df_object= df.query ('tracking_id==@unique_tracking_id')
                 bbox_veh= np.array(list(df_object.bbox)).astype(int)
                 cross_zone= Zone_cacl(bbox_veh,cross_line)
-#                 print (bbox_veh)
                 if ((cross_zone==[[1],[0]]).all() | (cross_zone==[[0],[1]]).all()):
                     obj_counter +=1
                     if cropping:
                         cropping_zone = np.where(bbox_veh[1]<0, 0, bbox_veh[1]) # assign 0 if the box is out of image size, take the lastest image
                         cropping_zone = np.where(bbox_veh[0]<0, 0, bbox_veh[0])
-#                         print ("test")
-#                         print (cropping_zone)
+
                         cropped_image = current_image[cropping_zone[1]:(cropping_zone[3]+17),cropping_zone[0]:cropping_zone[2],:]  
-#                         print (unique_tracking_id)
-#                         plt.imshow(cropped_image)
-#                         print (a)
+
                         x = cv2.imwrite(os.path.join(output_path,\
                                                 "CroppedImage_CarIndex{:.1f}.jpg".format(unique_tracking_id)),\
                                                 cropped_image) 
@@ -102,15 +95,14 @@ def ObjCount_process (mydataframe,output_path, current_image= [],\
 
 
 # +
-def Object_tracking(video_path, video_output_path, fps, show=False,  \
-                     cropping_line=[], violation_process=None):
+def Object_tracking(video_path, video_output_path, fps, show=False,cropping_line=[]):
     
     Track_only = ["person","car", "bus", "truck"]
 
-    #global parameters for AVA
+    ## global parameters for AVA
     global mydataframe
     
-    #create directory
+    ## create directory
     output_path, tail = os.path.split(video_output_path)
     
     print (output_path)
@@ -120,7 +112,7 @@ def Object_tracking(video_path, video_output_path, fps, show=False,  \
     else:
         os.mkdir(output_path)
     
-    #initial parameters for tracking
+    ## initial parameters for tracking
     CLASSES=YOLO_COCO_CLASSES
     rectangle_colors=(255,0,0)
     input_size=416
@@ -129,13 +121,13 @@ def Object_tracking(video_path, video_output_path, fps, show=False,  \
     max_cosine_distance = 0.7
     nn_budget = None
     
-    #initial parametersfor deep sort object
+    ## initial parametersfor deep sort object
     model_filename = 'model_data/mars-small128.pb'
     encoder = gdet.create_box_encoder(model_filename, batch_size=1)
     metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
     tracker = Tracker(metric)
 
-    #initial parameters for AVA
+    ## initial parameters for AVA
     storeframesize=2
     counter_car=0
     counter_pp_dir1=0
@@ -151,11 +143,11 @@ def Object_tracking(video_path, video_output_path, fps, show=False,  \
     else:
         vid = cv2.VideoCapture(0) # detect from webcam
 
-    # by default VideoCapture returns float instead of int
+    ## by default VideoCapture returns float instead of int
     width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-#     fps = int(vid.get(cv2.CAP_PROP_FPS))     
-    codec = cv2.VideoWriter_fourcc(*'XVID')  # codec should be compatible to the video format, for the MP4
+   
+    codec = cv2.VideoWriter_fourcc(*'mp4v')  #codec should be compatible to the video format, for the MP4
 
     if (fps ==0 | fps > 300): # to make sure the fps is read correctly
         out = cv2.VideoWriter(video_output_path, codec, 30, (width, height)) 
@@ -165,16 +157,10 @@ def Object_tracking(video_path, video_output_path, fps, show=False,  \
     NUM_CLASS = read_class_names(CLASSES)
     key_list = list(NUM_CLASS.keys()) 
     val_list = list(NUM_CLASS.values())
-    
-#     counter=0 #testing ----what frame to be interest
+
     
     while True:
-        success, frame = vid.read()
-        
-#         counter+=1
-#         if counter<180: #testing ----what frame to be interest
-#             continue
-            
+        success, frame = vid.read()     
         
         if success:  
             original_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -208,7 +194,7 @@ def Object_tracking(video_path, video_output_path, fps, show=False,  \
         bboxes = postprocess_boxes(pred_bbox, original_frame, input_size, score_threshold)
         bboxes = nms(bboxes, iou_threshold, method='nms')
 
-        # extract bboxes to boxes (x, y, width, height), scores and names
+        ## Extract bboxes to boxes (x, y, width, height), scores and names
         boxes, scores, names = [], [], []
         for bbox in bboxes:
             if len(Track_only) !=0 and NUM_CLASS[int(bbox[5])] in Track_only or len(Track_only) == 0:
@@ -216,29 +202,29 @@ def Object_tracking(video_path, video_output_path, fps, show=False,  \
                 scores.append(bbox[4])
                 names.append(NUM_CLASS[int(bbox[5])])
 
-        # Obtain all the detections for the given frame.
+        ## Obtain all the detections for the given frame.
         boxes = np.array(boxes) 
         names = np.array(names)
         scores = np.array(scores)
         features = np.array(encoder(original_frame, boxes))
         detections = [Detection(bbox, score, class_name, feature) for bbox, score, class_name, feature in zip(boxes, scores, names, features)]
 
-        # Pass detections to the deepsort object and obtain the track information.
+        ## Pass detections to the deepsort object and obtain the track information.
         tracker.predict()
         tracker.update(detections)
 
         
-        # Obtain info from the tracks
+        ## Obtain info from the tracks
         tracked_bboxes = []
         
         for track in tracker.tracks:
             if not track.is_confirmed() or track.time_since_update > 5:
                 continue 
-            bbox = track.to_tlbr() # Get the corrected/predicted bounding box
+            bbox = track.to_tlbr() #Get the corrected/predicted bounding box
             class_name = track.get_class() #Get the class name of particular object
-            tracking_id = track.track_id # Get the ID for the particular track
+            tracking_id = track.track_id #Get the ID for the particular track
             index = key_list[val_list.index(class_name)] # Get predicted object index by object name
-            tracked_bboxes.append(bbox.tolist() + [tracking_id, index]) # Structure data, that we could use it with our draw_bbox function
+            tracked_bboxes.append(bbox.tolist() + [tracking_id, index]) #Structure data, that we could use it with our draw_bbox function
             
             new_row = {'frame_index':current_frameIndex,'tracking_id':tracking_id, 'class_object':class_name,\
                         "bbox":bbox.tolist()} #info of every object in the frame
@@ -246,12 +232,12 @@ def Object_tracking(video_path, video_output_path, fps, show=False,  \
                    
         MyTruncatedData (storeframesize,current_frameIndex) #limit the size of storing data to counting 
         
-        # Counting nr of vehicles + crop vehicle image 
+        ## Counting nr of vehicles + crop vehicle image 
         counter_car+= ObjCount_process (mydataframe, output_path,current_image= original_frame,\
                                         class_interest= ["car", "bus", "truck"],cropping=True,cross_line=cropping_line)        
         
         
-        # draw detection on frame
+        ## Draw detection on frame
         image = draw_bbox(original_frame, tracked_bboxes, CLASSES=CLASSES, tracking=True)
             
         t3 = time.time()
@@ -266,7 +252,6 @@ def Object_tracking(video_path, video_output_path, fps, show=False,  \
         fps1 = 1000 / ms
         fps2 = 1000 / (sum(times_2)/len(times_2)*1000)
         image = cv2.putText(image, "Frame: {:.1f} ".format(current_frameIndex), (0, 50), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (102, 102, 255), 2)
-#         image = cv2.putText(image, "Time: {:.1f} FPS".format(fps1), (0, 40), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (0, 0, 255), 2)
         image = cv2.putText(image, "NrCar: {:.1f} ".format(counter_car), (0, 80), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (0, 0, 255), 2)
         image = cv2.line(image, start_point, end_point, (0, 255, 0), 5) #imprint the cropping line in de video
         
@@ -280,11 +265,6 @@ def Object_tracking(video_path, video_output_path, fps, show=False,  \
             plt.plot(cropping_line[0],cropping_line[1]) #draw the cropping line
             plt.show()
    
-
-        
-        if violation_process is not None:
-            violation_process()
-
 
 # -
 
@@ -300,7 +280,6 @@ def PedX_visualization(video_path, zone):
         vid = cv2.VideoCapture(0) # detect from webcam
     width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-#     fps = int(vid.get(cv2.CAP_PROP_FPS))
    
     success, frame = vid.read()
     if success: 
@@ -332,7 +311,6 @@ def focal_line_visualization (video_path, cross_line):
         vid = cv2.VideoCapture(0) # detect from webcam
     width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-#     fps = int(vid.get(cv2.CAP_PROP_FPS))
    
     success, frame = vid.read()
     if success: 
