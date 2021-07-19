@@ -94,7 +94,6 @@ def ObjCount_process (mydataframe,output_path, current_image= [],\
     return obj_counter
 
 
-# +
 def Object_tracking(video_path, video_output_path, fps, show=False,cropping_line=[]):
     
     Track_only = ["person","car", "bus", "truck"]
@@ -140,8 +139,10 @@ def Object_tracking(video_path, video_output_path, fps, show=False,cropping_line
     
     if video_path:
         vid = cv2.VideoCapture(video_path) # detect on video
+        
     else:
         vid = cv2.VideoCapture(0) # detect from webcam
+        print('No input file')
 
     ## by default VideoCapture returns float instead of int
     width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -264,9 +265,7 @@ def Object_tracking(video_path, video_output_path, fps, show=False,cropping_line
             plt.imshow(image)
             plt.plot(cropping_line[0],cropping_line[1]) #draw the cropping line
             plt.show()
-   
 
-# -
 
 def PedX_visualization(video_path, zone):
 # PedX visualization on the image
