@@ -39,7 +39,7 @@ fig = plt.figure(figsize=(8, 6), dpi=80)
 
 ## Track_only = ["person","car","bus", "truck"]
 ## turn on "show" to view results
-AVATools.Object_tracking(video_input_path, video_output_path,fps=fps, show=True, cropping_line=vehicle_cropping_line)
+AVATools.Object_tracking(video_input_path, video_output_path,fps=fps, show=False, cropping_line=vehicle_cropping_line)
 # -
 
 
