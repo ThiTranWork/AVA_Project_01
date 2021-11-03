@@ -1,5 +1,6 @@
 # +
 import AVATools
+import clipwriter
 
 from IPython.display import clear_output
 import matplotlib
@@ -12,35 +13,49 @@ import cv2
 
 
 # +
-## part 1 - Detection
+## part 1 - Settings and Calibration
 
 import importlib
-importlib.reload(AVATools)
 
-## define input and output path
-video_input_path   = "/workspace/AVA_model/Dubai_2.ts" 
-video_output_path = "/workspace/AVA_model/Results_Dubai_2/Dubai_2_out.mp4" 
-fps=20
 
-## define position of cropping: a line from left to right [(x1,x2), (y1,y2)]
-# vehicle_cropping_line = np.array([(330,770), (200,260)])
+## input and output path
 
-## test with videos from Vitronics
-vehicle_cropping_line = np.array([(330,770), (210,250)]) # Dubai_1,2
-# vehicle_cropping_line = np.array([(430,1200), (450,200)]) # DMM_1-4
-# vehicle_cropping_line = np.array([(650,1400), (280,500)]) # DMM_5
-# vehicle_cropping_line = np.array([(900,1700), (400,340)]) # PACIDAL_1
-# vehicle_cropping_line = np.array([(780,1600), (700,680)]) # PACIDAL_2
+# video_input_path  = "/workspace/AVA_model/Hasselt_4.mp4"
+# video_output_path = "/workspace/AVA_model/OutResults_Hasselt_4/Hasselt4_out.mp4" 
+# fps=20
 
-## to visualize the line
-# AVATools.focal_line_visualization (video_input_path, vehicle_cropping_line) 
+## test for the object stationary
 
-fig = plt.figure(figsize=(8, 6), dpi=80)
+video_input_path   = "/workspace/AVA_model/Hasselt_Stationary_Objects_anonymized.mkv"
+video_output_path = "/workspace/AVA_model/OutResults_Hasselt_Stationary_Objects/Hasselt_SO_A_out.mp4" 
+fps=30
 
-## Track_only = ["person","car","bus", "truck"]
-## turn on "show" to view results
-AVATools.Object_tracking(video_input_path, video_output_path,fps=fps, show=False, cropping_line=vehicle_cropping_line)
+
+## Test for person counting; vehicle counting, PedX violation, vehicle solid line violation
+## Define position of a line: a line from left to right [(x1,x2), (y1,y2)]
+## Define position of a zone: all points in series [(x1,x2,x3,...), (y1,y2, y3,...)]
+
+person_crossing_line = np.array([(0,1600), (1100,600)]) # Hasselt_123;
+vehicle_cropping_line = np.array([(1000,2000), (400,780)]) # Hasselt_123; 
+vehicle_crossing_line= np.array([(1300,2000), (300,780)])  # Hasselt_123
+PedX= np.array([(150, 1100,1900, 780), (750, 420,780, 1410)])  # Hasselt_123
+
+
+## to visuallize the line or zone on the image:
+
+# AVATools.RefX_visualization (video_input_path, person_crossing_line,grid_size= 200 ) #to visualize the person_crossing_line
+# AVATools.RefX_visualization (video_input_path, PedX, grid_size= 200) #to visualize the PEDX 
+
+
+
 # -
-
+#turn on option "show" to view results
+importlib.reload(AVATools)
+AVATools.Object_tracking(video_input_path, video_output_path,fps=fps, show=False,  \
+                        vehicle_counting=False, cropping_line=vehicle_cropping_line , \
+                        per_counting=False, person_crossing_line=person_crossing_line , \
+                        lineCrossingDect=False, vehicle_crossing_line=vehicle_crossing_line ,\
+                        PedXViolationDect=False, PedX=PedX,\
+                        stationaryObjectAlarm=True, stationaryDist=15, timeTrackinginSecond=60)
 
 
