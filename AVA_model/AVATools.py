@@ -151,7 +151,8 @@ def initialization(video_output_path):
 
 
 
-def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
+# +
+def Object_tracking(video_path, video_output_path, fps=20, show=False, savingOpt=False, \
                      vehicle_counting=False, cropping_line=[], \
                      per_counting=False, person_crossing_line=[], \
                      lineCrossingDect=False, vehicle_crossing_line=[],\
@@ -186,13 +187,11 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
     counter_car=0
     counter_pp_Z01=0
     counter_pp_Z10=0
-
     
     #parameters to save violation clip
     lengthClip = 10 #clip length in seconds
     bufferSize = int(lengthClip/2*fps)
-    bufferSize=100 #test for stationary objects
-
+#     bufferSize=100 #test for stationary objects
 
     #initialized for PedX violation
     consecFramesPedX=0
@@ -209,18 +208,22 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
     ostClip= ClipWriter(bufferSize)
     ostTrigger=0 
 
+
+
+    #initialized for output files
     if stationaryObjectAlarm:
         StationaryFile="{}/StationaryObjects.csv".format(output_path)
-        stationaryObjects_info= ['frame_index', 'tracking_id', 'class_object', "bbox", "centroid", "timestamp", "stationaryTrack" ]
+        stationaryObjects_info= ['frame_index', 'tracking_id', 'class_object', "bbox", "centroid", "timestamp", 'stationaryTrack' ]
         ostAlertSave_df= pd.DataFrame(columns=stationaryObjects_info)
         ostAlertSave_df.to_csv(StationaryFile,mode='w', encoding='utf-8', index=False)
-
 
     objects_info = ['frame_index', 'tracking_id', 'class_object', "bbox", "centroid", "timestamp" ]
     fileName="{}/Objects.csv".format(output_path)
     new_dict =pd.DataFrame(columns=objects_info)
     new_dict.to_csv(fileName,mode='w', encoding='utf-8', index=False)
 
+    times_1, times_2, times_3, times_4, times_5, times_6 = [], [], [], [], [], []
+    times_read, times_detect,times_tracker = [],[],[]
     
     if video_path:
         vid = cv2.VideoCapture(video_path) # detect on video
@@ -232,7 +235,7 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
     height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fontSize=int(0.002*height)
     fps1 = int(vid.get(cv2.CAP_PROP_FPS))   # to read fps  
-    codec = cv2.VideoWriter_fourcc(*'XVID')  # codec should be compatible to the video format, for the MP4
+    codec = cv2.VideoWriter_fourcc(*'XVID')  # codec should be compatible to the video format, for the avi
 
     if (fps ==0 | fps > 300): # to make sure the fps is read correctly
         out = cv2.VideoWriter(video_output_path, codec, fps, (width, height)) 
@@ -244,11 +247,17 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
     val_list = list(NUM_CLASS.values())
     
 
-    countTest=0
+    # countTest=0
+    
+    t_begin=time.time() #starting time
+
+##------Begin------
 
     while True:
+        t0 = time.time()
         success, frame = vid.read()
-        print(".")
+#         print(".")
+        t_read = time.time() #start time for each Frame  
 
         # countTest+=1
         # if countTest<3500:
@@ -275,7 +284,9 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
             pred_bbox = []
             for key, value in result.items():
                 value = value.numpy()
-                pred_bbox.append(value)        
+                pred_bbox.append(value)    
+                    
+        t_preprocess= time.time()
 
         pred_bbox = [tf.reshape(x, (-1, tf.shape(x)[-1])) for x in pred_bbox]
         pred_bbox = tf.concat(pred_bbox, axis=0)
@@ -297,11 +308,12 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
         scores = np.array(scores)
         features = np.array(encoder(original_frame, boxes))
         detections = [Detection(bbox, score, class_name, feature) for bbox, score, class_name, feature in zip(boxes, scores, names, features)]
-
+        
+        t_detection= time.time()
         # Pass detections to the deepsort object and obtain the track information.
         tracker.predict()
         tracker.update(detections)
-
+        
         
         # Obtain info from the tracks
         tracked_bboxes = []
@@ -322,9 +334,10 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
             new_dict=new_dict.append(new_row,ignore_index=True)
             mydataframe = mydataframe.append(new_row,ignore_index=True)
 
+        t_tracker= time.time()
         
 
-
+        
         mydataframe = MyTruncatedData (mydataframe,storeframesize,current_frameIndex) #limit the size of storing data to counting 
         
         # Store the whole data to the csv file
@@ -332,41 +345,54 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
         
 
         image = original_frame
-        image = cv2.putText(image, "Frame: {:.1f} ".format(current_frameIndex), (100, 50), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontSize, (0, 102, 255), 2)
+        
 
-        ## Proceesing:
+        if savingOpt:    
+            image = cv2.putText(image, "Frame: {:.1f} ".format(current_frameIndex), (100, 50), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontSize, (0, 102, 255), 2)
 
+        t1 = time.time() #finish the detection by YOLO per frame
+
+## -------------Violation Proceesing--------------------------------------
+        ## -------------Vehicle counting---------------------------
         if vehicle_counting:
             # Counting nr of vehicles + crop vehicle image 
 
             counter_car+= ObjCount_process (mydataframe, output_path,current_image= original_frame,\
-                                        class_interest= ["car", "bus", "truck"],cropping=True,cross_line=cropping_line)[0]       
-            # show/imprint nr of vehicles        
-            start_point_car = tuple(cropping_line[:,0])
-            end_point_car = tuple(cropping_line[:,1])
-            org_car=tuple(cropping_line[:,0]) 
-            image = cv2.putText(image, "NrCar: {:.1f} ".format(counter_car), org_car, cv2.FONT_HERSHEY_COMPLEX_SMALL, fontSize, (0, 206, 0), 2)
-            image = cv2.line(image, start_point_car, end_point_car, (0, 206, 0), 2) #imprint the cropping line in de video
+                                        class_interest= ["car", "bus", "truck"],cropping=True,cross_line=cropping_line)[0] 
+            if savingOpt:    
+                # show/imprint nr of vehicles        
+                start_point_car = tuple(cropping_line[:,0])
+                end_point_car = tuple(cropping_line[:,1])
+                org_car=tuple(cropping_line[:,0]) 
+                image = cv2.putText(image, "NrCar: {:.1f} ".format(counter_car), org_car, cv2.FONT_HERSHEY_COMPLEX_SMALL, fontSize, (0, 206, 0), 2)
+                image = cv2.line(image, start_point_car, end_point_car, (0, 206, 0), 2) #imprint the cropping line in de video
+
+        t2 = time.time() #finish the detection by vehicle_counting per frame
         
+        ## -------------Pedestrian counting---------------------------
         if per_counting:
             # Counting nr of pedestrians in two directions
             counter_pp_Z01 += ObjCount_process (mydataframe, output_path,current_image= original_frame,\
                                         class_interest= ["person"],cropping=False,cross_line=person_crossing_line)[0]     
             counter_pp_Z10 += ObjCount_process (mydataframe, output_path,current_image= original_frame,\
                                         class_interest= ["person"],cropping=False,cross_line=person_crossing_line)[1]
+            if savingOpt:           
+                #showing/imprint person crossing line+ counting nr in both directions           
+                start_point_person = tuple(person_crossing_line[:,0])
+                end_point_person = tuple(person_crossing_line[:,1])
+                org_pp1= tuple(person_crossing_line[:,1] - [int(0.16*height), -int(0.008*height)])
+                image = cv2.putText(image, "NrPer:{:.1f} ".format(counter_pp_Z01), org_pp1, cv2.FONT_HERSHEY_COMPLEX_SMALL, fontSize, (76,0, 153), 2)
+                image = cv2.line(image, start_point_person, end_point_person, (76,0, 153), 2) #imprint the person crossing line in de video
             
-            #showing/imprint person crossing line+ counting nr in both directions           
-            start_point_person = tuple(person_crossing_line[:,0])
-            end_point_person = tuple(person_crossing_line[:,1])
-            org_pp1= tuple(person_crossing_line[:,1] - [int(0.16*height), -int(0.008*height)])
-            image = cv2.putText(image, "NrPer:{:.1f} ".format(counter_pp_Z01), org_pp1, cv2.FONT_HERSHEY_COMPLEX_SMALL, fontSize, (76,0, 153), 2)
-            image = cv2.line(image, start_point_person, end_point_person, (76,0, 153), 2) #imprint the person crossing line in de video
-        
-            start_point_person = tuple(person_crossing_line[:,0]+[int(0.03*height),0])
-            end_point_person = tuple(person_crossing_line[:,1]+[int(0.03*height),0])
-            org_pp2= tuple(person_crossing_line[:,1] +[int(0.03*height), int(0.008*height)])
-            image = cv2.putText(image, "NrPer:{:.1f} ".format(counter_pp_Z10), org_pp2, cv2.FONT_HERSHEY_COMPLEX_SMALL, fontSize, (128, 0, 0), 2)     
-            image = cv2.line(image, start_point_person, end_point_person, (128, 0, 0), 2) #imprint the person crossing line in de video
+                start_point_person = tuple(person_crossing_line[:,0]+[int(0.03*height),0])
+                end_point_person = tuple(person_crossing_line[:,1]+[int(0.03*height),0])
+                org_pp2= tuple(person_crossing_line[:,1] +[int(0.03*height), int(0.008*height)])
+                image = cv2.putText(image, "NrPer:{:.1f} ".format(counter_pp_Z10), org_pp2, cv2.FONT_HERSHEY_COMPLEX_SMALL, fontSize, (128, 0, 0), 2)     
+                image = cv2.line(image, start_point_person, end_point_person, (128, 0, 0), 2) #imprint the person crossing line in de video
+        t3 = time.time() #finish the detection by person_counting per frame
+
+
+        ## -------------Solid line crossing detection---------------------------
 
         if lineCrossingDect:
             if ObjCount_process (mydataframe, output_path,current_image= original_frame,class_interest= ["car", "bus", "truck"],cropping=False,cross_line=vehicle_crossing_line)[0] ==1:       
@@ -375,8 +401,8 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
                 vclTrigger +=1
                 # if we are not already recording, start recording
                 if not lcvClip.recording:                
-                    p = "{}/lcvClip{}.mp4".format(output_path,timestamp.strftime("%Y%m%d-%H%M%S"))
-                    # p="{0}/test.mp4".format(output_path)
+                    p = "{}/lcvClip{}.avi".format(output_path,timestamp.strftime("%Y%m%d-%H%M%S"))
+                    # p="{0}/test.avi".format(output_path)
                     lcvClip.start(p, codec, fps)
                     print("lcvClip writing")
             # increment the number of consecutive frames 
@@ -387,13 +413,18 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
             if lcvClip.recording and lcvConsecFrames == bufferSize:
                 lcvClip.finish()
 
-            #showing/imprint   
-            vcl=np.transpose(vehicle_crossing_line)
-            vcl_tup=map(tuple, vcl)
-            vcl_tuples = tuple(vcl_tup)
-            image = cv2.line(image, vcl_tuples[0], vcl_tuples[1], (128, 0, 0), 2) #imprint the crossing line in de video 
-            image = cv2.putText(image, "Nr car crossing line Violation:{:.1f} ".format(vclTrigger), vcl_tuples[0], cv2.FONT_HERSHEY_COMPLEX_SMALL,fontSize, (150, 206, 105), 2)
+            if savingOpt:    
+                #showing/imprint   
+                vcl=np.transpose(vehicle_crossing_line)
+                vcl_tup=map(tuple, vcl)
+                vcl_tuples = tuple(vcl_tup)
+                image = cv2.line(image, vcl_tuples[0], vcl_tuples[1], (128, 0, 0), 2) #imprint the crossing line in de video 
+                image = cv2.putText(image, "Nr car crossing line Violation:{:.1f} ".format(vclTrigger), vcl_tuples[0], cv2.FONT_HERSHEY_COMPLEX_SMALL,fontSize, (150, 206, 105), 2)
+       
+        t4 = time.time() #finish the detection by lineCrossingDect per frame
 
+
+        ## -------------Pedestrian Zone Violation---------------------------
         if PedXViolationDect:
             eventTrigger=False
             if mydataframe.empty==False:
@@ -442,7 +473,7 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
                     consecFramesPedX=0
                     # if we are not already recording, start recording
                     if not PedXClip.recording:                
-                        p = "{}/PedXClip{}.mp4".format(output_path,timestamp.strftime("%Y%m%d-%H%M%S"))
+                        p = "{}/PedXClip{}.avi".format(output_path,timestamp.strftime("%Y%m%d-%H%M%S"))
                         PedXClip.start(p, codec, fps)
                         print("PedXClip writing")
 
@@ -453,27 +484,36 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
             # if reaching a threshold on consecutive number of frames with no action, stop recording the clip
             if PedXClip.recording and consecFramesPedX == bufferSize:
                 PedXClip.finish()
-           
-            #showing/imprint 
-            image= ImprintShape (image, PedX) #show the zone boundary
+            if savingOpt:    
+                #showing/imprint 
+                image= ImprintShape (image, PedX) #show the zone boundary
 
-            PedXt=np.transpose(PedX)
-            PedXtm=np.append(PedXt, [PedXt[0,:]],axis=0)
-            PedXt_tup = map(tuple, PedXtm)
-            PedXt_tuples = tuple(PedXt_tup)
-            print('test')
-            image = cv2.putText(image, "Nr PedX Violation: {:.1f} ".format(pedXTrigger), PedXt_tuples[0], cv2.FONT_HERSHEY_COMPLEX_SMALL, fontSize, (0, 206, 105), 2)
-            print('test2')
+                PedXt=np.transpose(PedX)
+                PedXtm=np.append(PedXt, [PedXt[0,:]],axis=0)
+                PedXt_tup = map(tuple, PedXtm)
+                PedXt_tuples = tuple(PedXt_tup)
+                print('test')
+                image = cv2.putText(image, "Nr PedX Violation: {:.1f} ".format(pedXTrigger), PedXt_tuples[0], cv2.FONT_HERSHEY_COMPLEX_SMALL, fontSize, (0, 206, 105), 2)
+                print('test2')
+        t5 = time.time()  #finish the detection by PedXViolationDect per frame
 
-# image = cv2.putText(image, "Frame: {:.1f} ".format(current_frameIndex), (100, 50), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontSize, (0, 102, 255), 2)(0, 206, 105)
+
+        ## -------------Stationary object detection---------------------------
         if stationaryObjectAlarm: 
             ost_eventTrigger = False
             ostAlert_df = pd.DataFrame()
+            timeTrackingVehicleInSecond=timeTrackinginSecond
+            timeTrackingPersonInSecond=timeTrackinginSecond
+            timeTrackingObjectInSecond=timeTrackinginSecond
+            frame_tracking= int(timeTrackinginSecond*fps) #min number of frames that the object stationary is alert 
+            frame_tracking_veh= int(timeTrackingVehicleInSecond*fps) #min number of frames that the object stationary is alert 
             
+            frame_tracking_person= int(timeTrackingPersonInSecond*fps) #min number of frames that the object stationary is alert 
+            frame_tracking_object= int(timeTrackingObjectInSecond*fps) #min number of frames that the object stationary is alert 
+
             if mydataframe.empty==False:
                 ost_df= UpdateStationaryStatus(mydataframe,current_frameIndex,stationaryDist, class_interest=["car", "bus", "truck", "person", "suicase"])
-                frame_tracking= int(timeTrackinginSecond*fps) #min number of frames that the object stationary is alert 
-                ostAlert_df = ost_df.loc[(ost_df['frame_index'] == current_frameIndex) & (ost_df['stationaryTrack'] == frame_tracking)]
+                ostAlert_df = ost_df.loc[(ost_df['frame_index'] == current_frameIndex) & (ost_df['stationaryTrack'] == frame_tracking_veh)]
                 if ostAlert_df.empty ==False:
                     print("Trigger")
                     ost_eventTrigger=True
@@ -483,11 +523,12 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
                     ostConsecFrames=0
                     # if we are not already recording, start recording
                     if not ostClip.recording:                
-                        ost = "{}/StationaryTrackingClip{}.mp4".format(output_path,timestamp.strftime("%Y%m%d-%H%M%S"))
+                        ost = "{}/StationaryTrackingClip{}.avi".format(output_path,timestamp.strftime("%Y%m%d-%H%M%S"))
                         ostClip.start(ost, codec, fps)
                         print("ostClip writing")
                     #save to output file
                     ostAlertSave_df = ost_df.loc[(ost_df['frame_index'] == current_frameIndex) & (ost_df['stationaryTrack'] >= frame_tracking)]
+                    ostAlertSave_df['stationaryTrack']= ostAlertSave_df['stationaryTrack']/fps
                     ostAlertSave_df.to_csv(StationaryFile, mode='a', columns = stationaryObjects_info, header=False, encoding='utf-8', index=False)                
                 
             # increment the number of consecutive frames 
@@ -497,13 +538,14 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
             # if reaching a threshold on consecutive number of frames with no action, stop recording the clip
             if ostClip.recording and ostConsecFrames == bufferSize:
                 ostClip.finish()
-                    
-                    
+        # t7 = time.time() #finish the detection by stationaryObjectAlarm per frame         
+                
+        if savingOpt:    
         
-        image = draw_bbox(original_frame, tracked_bboxes, CLASSES=CLASSES, tracking=True) # draw detection on frame
-        
-        if video_output_path != '': # To write out video  
-            out.write(image)
+            #draw box, write out images
+            image = draw_bbox(original_frame, tracked_bboxes, CLASSES=CLASSES, tracking=True) # draw detection on frame     
+            if video_output_path != '': # To write out video  
+                out.write(image)
 
         
         if show:
@@ -513,17 +555,77 @@ def Object_tracking(video_path, video_output_path, fps=20, show=False,  \
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) 
             plt.imshow(image)
             plt.show()
-   
 
-                
+        t6 = time.time() #finish a frame
 
-    
+        times_1.append(t1-t0)
+        times_2.append(t2-t0)
+        times_3.append(t3-t0)
+        times_4.append(t4-t0)
+        times_5.append(t5-t0)
+        times_6.append(t6-t0)
+
+        times_read.append(t_read-t0)
+        times_detect.append(t_detection-t0)
+        times_tracker.append(t_tracker-t0)
+
+        times_1 = times_1[-20:]
+        times_2 = times_2[-20:]
+        times_3 = times_3[-20:]
+        times_4 = times_4[-20:]
+        times_5 = times_5[-20:]
+        times_6 = times_6[-20:]
+
+        times_read=times_read[-20:]
+        times_detect=times_detect[-20:]
+        times_tracker= times_tracker[-20:]
+
+
+        fps1 = 1/(sum(times_1)/len(times_1))
+        fps2 = 1/(sum(times_2)/len(times_2))
+        fps3 = 1/(sum(times_3)/len(times_3))
+        fps4 = 1/(sum(times_4)/len(times_4))
+        fps5 = 1/(sum(times_5)/len(times_5))
+        fps6 = 1/(sum(times_6)/len(times_6))
+
+
+        fpsread = 1/(sum(times_read)/len(times_read))
+        fpsdetect = 1/(sum(times_detect)/len(times_detect))
+        fpstracker = 1/(sum(times_tracker)/len(times_tracker))
+        print ("fps1:", fps1)
+        print ("fps2:",fps2)
+        print ("fps3:",fps3)
+        print ("fps4:",fps4)
+        print ("fps5:",fps5)
+        print ("fps6:",fps6)
+
+        print ("fpsread:",fpsread)
+        print ("fpsdetec:",fpsdetect)
+        print ("fpstracker:",fpstracker)
+
     if PedXClip.recording: # in case of in the middle of recording a clip, wrap it up
 	    PedXClip.finish()
     if lcvClip.recording: # in case of in the middle of recording a clip, wrap it up
 	    lcvClip.finish() 
     if ostClip.recording: # in case of in the middle of recording a clip, wrap it up
 	    ostClip.finish() 
+    
+
+
+
+    t_final = time.time()
+    t_total= t_final-t_begin
+
+    print("t_total:",t_total)
+    print("counter_car",counter_car)
+    print("counter_pp_Z01",counter_pp_Z01)
+    print("counter_pp_Z10", counter_pp_Z10)
+    print("pedXTrigger", pedXTrigger)
+    print("vclTrigger", vclTrigger)
+
+
+
+
 
 def RefX_visualization (video_path, shapeCoord, grid_size= 100):
     # the reference zone for visualization on the image
@@ -562,5 +664,8 @@ def ImprintShape (image, shapeCoord):          #showing/imprint on the image
     shapeCoordt_tuples = tuple(shapeCoordt_tup)
     for pnr in range (0,len(shapeCoordtm)-1):
         image = cv2.line(image, shapeCoordt_tuples[pnr],shapeCoordt_tuples[pnr+1], (128, 0, 0), 2) #imprint the person crossing line in de video 
+
+
+# -
 
 
